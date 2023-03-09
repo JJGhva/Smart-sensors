@@ -1,0 +1,83 @@
+#define  F_CPU   32000000UL     //!< System clock is 32 MHz
+#define BAUD_100K        100000UL
+
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+
+#include "serialF0.h"
+#include "i2c.h"
+#include "rtc.h"
+
+#include "clock.h"              // see also https://dolman-wim.nl/xmega/libraries/index.php
+#include "ucglib/ucg.h"
+#include "ucglib_xmega.h"
+
+
+
+
+/*!
+ *  \brief connectArraySPI contains the non-SPI connections with display
+ */
+pin_t connectArraySPI[] = {   
+  { UCG_XMEGA_PIN_RST, &PORTD, PIN3_bp },   //!< RST (RESET) pin is D3
+  { UCG_XMEGA_PIN_CD,  &PORTD, PIN2_bp },   //!< CD (A0, RS) pin is D2
+  { UCG_XMEGA_PIN_NULL }  
+};
+
+ucg_t    ucg;                   //!< ucg is a necessary global structure for ucg_lib
+
+/*!
+ *  \brief Main function to demonstrate the usage of ucglib_xmega library
+ */
+int main(void)
+{
+ // ucg_int_t x, y;
+  //uint8_t a;
+	char t[]="HH:MM:SS";
+	i2c_init(&TWIE, TWI_BAUD(F_CPU, BAUD_100K));
+	PORTE.DIRSET    = PIN1_bm|PIN0_bm;            // SDA 0 SCL 1
+	PORTE.PIN0CTRL  = PORT_OPC_WIREDANDPULL_gc;   // Pullup SDA
+	PORTE.PIN1CTRL  = PORT_OPC_WIREDANDPULL_gc;   // Pullup SCL
+
+	init_stream(F_CPU);
+	sei();
+
+  init_clock();
+ 
+  ucg_connectXmega(&SPID, connectArraySPI, 0);
+  ucg_Init(&ucg, ucg_dev_st7735_18x128x160, ucg_ext_st7735_18,
+                 (int (*)(struct _ucg_t *, int,  unsigned int,  unsigned char *)) ucg_commXmegaSPI);
+
+  ucg_SetFontMode(&ucg, UCG_FONT_MODE_TRANSPARENT);  
+  ucg_ClearScreen(&ucg);
+  ucg_SetFont(&ucg, ucg_font_8x13_mr);
+  ucg_SetColor(&ucg, 0, 255, 255, 0);
+  ucg_SetRotate90(&ucg);
+  //ucg_DrawString(&ucg, 2, 20, 0, "TEST DISPLAY [HAL]");
+  _delay_ms(1000);
+	
+
+  ucg_DrawRFrame(&ucg,0,0,160,128,5);
+ 
+  
+  
+  
+  ucg_SetFontMode(&ucg, UCG_FONT_MODE_SOLID);  // overwrite background
+  ucg_SetFont(&ucg, ucg_font_8x13_mr);         // non proportional font
+  ucg_SetPrintPos(&ucg, 2, 80);    
+	//string_to_rtc_time("04:08:00");
+//	rtc_set_time(&TWIE);
+
+	
+	while(1) {
+		clear_screen();
+		rtc_get_time(&TWIE);
+		printf("%s",rtc_time_to_string(t));
+		ucg_SetFontMode(&ucg, UCG_FONT_MODE_SOLID);  // overwrite background
+		ucg_SetFont(&ucg, ucg_font_8x13_mr);         // non proportional font
+		ucg_SetPrintPos(&ucg, 50, 50);
+		ucg_Print(&ucg,"%s", rtc_time_to_string(t));
+		_delay_ms(1000);
+	}
+}
